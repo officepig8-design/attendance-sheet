@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>屏東牧場出勤表</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; background: #eceff1; padding: 20px; }
+        .setup-box { max-width: 850px; margin: 0 auto 20px; background: white; padding: 25px; border-radius: 12px; text-align: center; border: 3px solid #d35400; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .rule-info { background: #e0f2fe; border-left: 4px solid #0284c7; padding: 10px 15px; border-radius: 4px; margin: 15px 0; text-align: left; font-size: 13px; color: #0369a1; }
+        .file-group { display: flex; gap: 10px; margin-bottom: 15px; text-align: left; }
+        .file-item { flex: 1; background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #ccc; }
+        .file-item label { font-weight: bold; font-size: 13px; display: block; margin-bottom: 5px; color: #333; }
+        .btn-run { background: #d35400; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; width: 48%; }
+        .btn-export { background: #27ae60; color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 18px; font-weight: bold; width: 48%; display: none; }
+        .btn-bar { display: none; margin-top: 10px; gap: 6px; justify-content: center; flex-wrap: wrap; }
+        .btn-save { background: #2980b9; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        .btn-load { background: #8e44ad; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        .btn-clear { background: #c0392b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        .save-hint { font-size: 11px; color: #888; margin-top: 4px; }
+        .card-wall { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+        .time-card { width: 1120px; border: 2px solid #333; background: white; padding: 12px; font-size: 12px; page-break-inside: avoid; margin-bottom: 20px; box-sizing: border-box; }
+        .card-title { text-align: center; border-bottom: 2px solid #333; margin: 0 0 8px 0; padding-bottom: 5px; font-size: 20px; }
+        .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; background: #fff9f0; table-layout: fixed; }
+        .summary-table td { border: 1px solid #ddd; padding: 6px 2px; text-align: center; font-size: 11px; white-space: nowrap; }
+        .summary-table b { color: #d35400; font-size: 14px; display: inline-block; }
+        
+        /* 消除 input number 的微調箭頭 */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        .edit-val { width: 34px; text-align: center; font-weight: bold; border: 1px solid #ccc; color: #d35400; padding: 1px 0; margin: 0 2px; }
+        .row { display: flex; border-bottom: 1px solid #eee; min-height: 36px; align-items: center; }
+        
+        .cell-d { width: 45px; background: transparent; text-align: center; font-weight: bold; font-size: 11px; line-height: 36px; }
+        
+        .absent-row { background: #fffbe6 !important; }
+        .absent-row .cell-d { background: #fffbe6 !important; }
+
+        .sat-cell { background: #e0f2fe !important; color: #0284c7 !important; }
+        .sun-cell { background: #bae6fd !important; color: #0369a1 !important; }
+
+        .cell-t { width: 65px; text-align: center; border-left: 1px solid #ddd; height: 36px; line-height: 36px; font-size: 11px; }
+        .cell-n { flex: 1; padding-left: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+        .missing { background: #ffcfcf !important; color: #b71c1c; font-weight: bold; } 
+        .late-text { color: red; font-weight: bold; }
+        .ot-text { color: #27ae60 !important; font-weight: bold !important; }
+        .btn-lv { font-size: 10px; padding: 3px 5px; cursor: pointer; border: 1px solid #ccc; background: #fff; border-radius: 3px; font-weight: bold; }
+        .ot-label { font-size:11px; font-weight:bold; color:#27ae60; margin-left:2px; }
+        .ot-input { width: 40px; font-size: 12px; padding: 3px 2px; text-align: center; border: 1.5px solid #27ae60; border-radius: 4px; font-weight: bold; color: #27ae60; background: #f4fbf7; }
+        .ot-input:focus { background: #fff; outline: none; border-color: #1e8449; }
+        .ot-note-input { width: 110px; font-size: 11px; padding: 3px 4px; border: 1.5px solid #27ae60; border-radius: 4px; background: #f4fbf7; color: #1e8449; }
+        .ot-note-input:focus { background: #fff; outline: none; }
+        .note-input { width: 130px; font-size: 11px; padding: 3px 4px; border: 1.5px solid #aaa; border-radius: 4px; background: #fafafa; }
+        .note-input:focus { background: #fff; border-color: #d35400; outline: none; }
+        .active-rest { background: #27ae60 !important; color: white; }
+        .active-personal { background: #2980b9 !important; color: white; }
+        .active-sick { background: #e67e22 !important; color: white; }
+        .header-row { background: #444; color: white; font-weight: bold; text-align: center; }
+        .header-row .cell-d { color: white; }
+        .no-time { background: #fff3b0; color: #b8860b; }
+
+        /* ================= 修復欄位數字與單位對齊之列印 CSS ================= */
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 5mm 6mm;
+            }
+            html, body {
+                background: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                height: 100% !important;
+                font-size: 11px !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .setup-box, .btn-bar, .save-hint, .btn-lv, .ot-label {
+                display: none !important;
+            }
+            .card-wall {
+                display: block !important;
+                height: 100% !important;
+            }
+            .time-card {
+                width: 100% !important;
+                max-width: 100% !important;
+                height: 284mm !important;
+                display: flex !important;
+                flex-direction: column !important;
+                border: 2px solid #000 !important;
+                padding: 6px 8px !important;
+                margin: 0 !important;
+                page-break-inside: avoid !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                box-sizing: border-box !important;
+            }
+            .time-card:last-child {
+                page-break-after: auto !important;
+                break-after: auto !important;
+            }
+            .card-title {
+                font-size: 20px !important;
+                margin-bottom: 4px !important;
+                padding-bottom: 2px !important;
+            }
+            
+            /* 頂部統計欄修復：完美緊湊顯示 */
+            .summary-table {
+                margin-bottom: 4px !important;
+                height: 32px !important;
+            }
+            .summary-table td {
+                padding: 2px 1px !important;
+                font-size: 11px !important;
+                white-space: nowrap !important;
+            }
+            .summary-table b {
+                font-size: 12px !important;
+                display: inline !important;
+            }
+            .edit-val {
+                border: none !important;
+                background: transparent !important;
+                font-size: 11px !important;
+                font-weight: bold !important;
+                width: 24px !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                text-align: right !important;
+                display: inline !important;
+                -webkit-appearance: none !important;
+            }
+
+            /* 明細表格對齊 */
+            .row {
+                flex: 1 !important;
+                min-height: 0 !important;
+                height: auto !important;
+                border-bottom: 1px solid #999 !important;
+                display: flex !important;
+                align-items: center !important;
+            }
+            .header-row {
+                flex: none !important;
+                height: 28px !important;
+                background: #333 !important;
+                color: #fff !important;
+            }
+            .header-row .cell-t {
+                font-size: 10.5px !important;
+                line-height: 1.1 !important;
+            }
+            
+            .cell-d {
+                width: 32px !important;
+                min-width: 32px !important;
+                text-align: center !important;
+                font-size: 12px !important;
+                font-weight: bold !important;
+                border-right: 1px solid #999 !important;
+            }
+            
+            .cell-t {
+                width: 58px !important;
+                min-width: 58px !important;
+                height: 100% !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                font-size: 12px !important;
+                font-weight: bold !important;
+                border-right: 1px solid #999 !important;
+                box-sizing: border-box !important;
+            }
+
+            .cell-n {
+                display: flex !important;
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                align-items: center !important;
+                gap: 8px !important;
+                padding-left: 8px !important;
+                height: 100% !important;
+                flex: 1 !important;
+            }
+            
+            .ot-input {
+                border: 1px solid #27ae60 !important;
+                width: 36px !important;
+                height: 20px !important;
+                font-size: 11px !important;
+                text-align: center !important;
+            }
+            .ot-note-input {
+                width: 130px !important;
+                border: 1px solid #27ae60 !important;
+                background: #fff !important;
+                font-size: 11px !important;
+                height: 20px !important;
+                line-height: 20px !important;
+                padding: 0 4px !important;
+                border-radius: 2px !important;
+            }
+            .note-input {
+                width: 170px !important;
+                border: 1px solid #aaa !important;
+                background: #fff !important;
+                font-size: 11px !important;
+                height: 20px !important;
+                line-height: 20px !important;
+                padding: 0 4px !important;
+                border-radius: 2px !important;
+            }
+            ::placeholder {
+                color: transparent !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="setup-box">
+    <h2 style="margin-top:0;">屏東牧場出勤表</h2>
+    
+    <div class="file-group">
+        <div class="file-item">
+            <label>1. 選擇「打卡紀錄」：</label>
+            <input type="file" id="fileIn" accept=".xlsx, .xls, .csv" style="width: 100%;" />
+        </div>
+        <div class="file-item">
+            <label>2. 匯入「加班單」：</label>
+            <input type="file" id="otFileIn" accept=".xlsx, .xls, .csv" style="width: 100%;" onchange="importOtFile()" />
+        </div>
+        <div class="file-item">
+            <label>3. 匯入「請假單」：</label>
+            <input type="file" id="lvFileIn" accept=".xlsx, .xls, .csv" style="width: 100%;" onchange="importLeaveFile()" />
+        </div>
+    </div>
+
+    <div class="rule-info">
+        ✨115/10/01更新  餐費計算、支援A4列印
+    </div>
+
+    <button id="runBtn" class="btn-run">產生出勤報表</button>
+    <button id="exportBtn" class="btn-export" onclick="doExport()">匯出統計 Excel</button>
+    <div id="btnBar" class="btn-bar">
+        <button class="btn-save" onclick="saveToJson()">💾 儲存進度(JSON)</button>
+        <button class="btn-load" onclick="loadFromJson()">📂 載入進度(JSON)</button>
+        <button class="btn-clear" onclick="clearState()">🗑 清除暫存</button>
+    </div>
+    <div id="saveHint" class="save-hint"></div>
+</div>
+
+<div id="output" class="card-wall"></div>
+
+<script>
+const AM_HOURS = 4;
+const PM_HOURS = 4;
+const DEFAULT_LATE_AM = "07:30";
+const LATE_PM = "14:00";
+const STORAGE_KEY = 'paoTienAttendance_v12';
+
+let otTargetStore = {};
+let currentMonthDays = 30;
+
+document.getElementById('runBtn').onclick = function() {
+    const fileIn = document.getElementById('fileIn');
+    if (fileIn.files.length === 0) { alert("請先選取打卡紀錄檔案！"); return; }
+    
+    localStorage.clear();
+    otTargetStore = {};
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const sheetName = workbook.SheetNames.find(n => n.includes("Log") || n.includes("紀錄")) || workbook.SheetNames[0];
+        const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        renderCards(json);
+        document.getElementById('exportBtn').style.display = 'inline-block';
+        document.getElementById('btnBar').style.display = 'flex';
+        
+        if (document.getElementById('otFileIn').files.length > 0) importOtFile();
+        if (document.getElementById('lvFileIn').files.length > 0) importLeaveFile();
+    };
+    reader.readAsArrayBuffer(fileIn.files[0]);
+};
+
+function timeToMinutes(tStr) {
+    if (!tStr || !tStr.includes(':')) return -1;
+    const parts = tStr.split(':');
+    return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+}
+
+function calcOtHoursFromMinutes(mins) {
+    if (mins <= 0) return 0;
+    const fullHours = Math.floor(mins / 60);
+    const remainMins = mins % 60;
+    let extra = 0;
+    if (remainMins >= 55) extra = 1.0;
+    else if (remainMins >= 25) extra = 0.5;
+    return fullHours + extra;
+}
+
+function importOtFile() {
+    const otFileIn = document.getElementById('otFileIn');
+    if (otFileIn.files.length === 0) return;
+
+    const cards = document.querySelectorAll('.time-card');
+    if (cards.length === 0) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const otData = XLSX.utils.sheet_to_json(sheet);
+
+        let matchCount = 0;
+        otData.forEach(row => {
+            const empName = String(row['員工姓名'] || row['姓名'] || '').trim();
+            const otDateStr = String(row['加班開始日期'] || row['申請日期'] || row['加班日期'] || '').trim();
+            const startTimeStr = String(row['加班開始時間'] || row['開始時間'] || '').trim();
+            const endTimeStr = String(row['加班結束時間'] || row['結束時間'] || '').trim();
+            const rawOtHours = parseFloat(row['加班時數 (實際)'] || row['加班時數(實際)'] || row['加班時數'] || 0);
+            const reason = String(row['事由說明'] || row['加班原因'] || '').trim();
+
+            if (!empName || !otDateStr) return;
+
+            let dayNum = 0;
+            const dateParts = otDateStr.split(/[-/]/);
+            if (dateParts.length >= 3) dayNum = parseInt(dateParts[2], 10);
+            if (!dayNum || dayNum < 1 || dayNum > currentMonthDays) return;
+
+            const startMin = timeToMinutes(startTimeStr);
+            const endMin = timeToMinutes(endTimeStr);
+
+            let finalOtHours = rawOtHours;
+            if (startMin > 0 && endMin > startMin) {
+                finalOtHours = calcOtHoursFromMinutes(endMin - startMin);
+            }
+
+            cards.forEach(card => {
+                if (card.getAttribute('data-name') === empName) {
+                    const idx = card.id.split('-')[1];
+                    const otInput = document.getElementById(`ot-${idx}-${dayNum}`);
+                    const otNoteInput = document.getElementById(`otnote-${idx}-${dayNum}`);
+
+                    if (otInput && otNoteInput) {
+                        otInput.value = finalOtHours;
+                        otNoteInput.value = reason;
+
+                        const fieldIds = ['amin', 'amout', 'pmin', 'pmout', 'nightin', 'nightout'];
+                        let bestMatchField = 'pmout';
+                        let minDiff = 9999;
+
+                        fieldIds.forEach(fId => {
+                            const el = document.getElementById(`${fId}-${idx}-${dayNum}`);
+                            if (el) {
+                                const punchMin = timeToMinutes(el.innerText.trim());
+                                if (punchMin > 0) {
+                                    if (endMin > 0 && Math.abs(punchMin - endMin) < minDiff) {
+                                        minDiff = Math.abs(punchMin - endMin);
+                                        bestMatchField = fId;
+                                    }
+                                }
+                            }
+                        });
+
+                        if (!otTargetStore[idx]) otTargetStore[idx] = {};
+                        otTargetStore[idx][dayNum] = bestMatchField;
+
+                        recalcOt(idx);
+                        matchCount++;
+                    }
+                }
+            });
+        });
+
+        showHint(`✅ 已成功帶入 ${matchCount} 筆加班單資料！`);
+        autoSave();
+    };
+    reader.readAsArrayBuffer(otFileIn.files[0]);
+}
+
+function importLeaveFile() {
+    const lvFileIn = document.getElementById('lvFileIn');
+    if (lvFileIn.files.length === 0) return;
+
+    const cards = document.querySelectorAll('.time-card');
+    if (cards.length === 0) {
+        alert("請先產生考勤報表後，再匯入請假單！");
+        return;
+    }
+
+    cards.forEach(card => {
+        const idx = card.id.split('-')[1];
+        document.getElementById(`restVal-${idx}`).value = "0.0";
+        document.getElementById(`persVal-${idx}`).value = "0.0";
+        document.getElementById(`sickVal-${idx}`).value = "0.0";
+        card.querySelectorAll('.btn-lv').forEach(b => {
+            b.classList.remove('active-rest', 'active-personal', 'active-sick');
+        });
+    });
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const lvData = XLSX.utils.sheet_to_json(sheet);
+
+        let matchCount = 0;
+
+        lvData.forEach(row => {
+            const empName = String(row['員工姓名'] || row['姓名'] || '').trim();
+            const lvDateStr = String(row['請假開始日期'] || row['請假日期'] || '').trim();
+            const startTimeStr = String(row['請假開始時間'] || row['開始時間'] || '').trim();
+            const lvHours = parseFloat(row['請假時數'] || 0);
+            const lvType = String(row['假別'] || '').trim();
+            const reason = String(row['事由說明'] || '').trim();
+
+            if (!empName || !lvDateStr) return;
+
+            let dayNum = 0;
+            const dateParts = lvDateStr.split(/[-/]/);
+            if (dateParts.length >= 3) dayNum = parseInt(dateParts[2], 10);
+            if (!dayNum || dayNum < 1 || dayNum > currentMonthDays) return;
+
+            const startMin = timeToMinutes(startTimeStr);
+            const isAM = startMin >= 0 && startMin < 12 * 60;
+
+            let typeKey = 'rest';
+            if (lvType.includes('事')) typeKey = 'pers';
+            else if (lvType.includes('病')) typeKey = 'sick';
+
+            cards.forEach(card => {
+                if (card.getAttribute('data-name') === empName) {
+                    const idx = card.id.split('-')[1];
+                    
+                    const noteEl = document.getElementById(`note-${idx}-${dayNum}`);
+                    if (noteEl && reason) {
+                        noteEl.value = reason;
+                    }
+
+                    const targetInput = document.getElementById(`${typeKey}Val-${idx}`);
+                    if (targetInput) {
+                        let curVal = parseFloat(targetInput.value) || 0;
+                        curVal += lvHours;
+                        targetInput.value = curVal.toFixed(1);
+                    }
+
+                    const btnText = (typeKey === 'pers' ? '事' : (typeKey === 'sick' ? '病' : '休')) + (isAM ? '上' : '下');
+                    if (noteEl) {
+                        const dayRow = noteEl.closest('.row');
+                        if (dayRow) {
+                            const btnList = dayRow.querySelectorAll('.btn-lv');
+                            btnList.forEach(b => {
+                                if (b.textContent === btnText) {
+                                    const clsMap = { 'rest': 'active-rest', 'pers': 'active-personal', 'sick': 'active-sick' };
+                                    b.classList.add(clsMap[typeKey]);
+                                }
+                            });
+                        }
+                    }
+
+                    matchCount++;
+                }
+            });
+        });
+
+        showHint(`✅ 已成功匯入 ${matchCount} 筆請假單資料！`);
+        autoSave();
+    };
+    reader.readAsArrayBuffer(lvFileIn.files[0]);
+}
+
+function renderCards(data) {
+    const output = document.getElementById('output');
+    output.innerHTML = "";
+    const names = [...new Set(data.map(item => item.姓名))].filter(n => n).sort();
+
+    let curYear = 2026, curMonth = 9;
+    for (let item of data) {
+        const dv = String(item.打卡日期 || '');
+        const match = dv.match(/(\d{4})[-/](\d{1,2})/);
+        if (match) {
+            curYear = parseInt(match[1], 10);
+            curMonth = parseInt(match[2], 10);
+            break;
+        }
+    }
+
+    currentMonthDays = new Date(curYear, curMonth, 0).getDate();
+
+    names.forEach((empName, empIdx) => {
+        const myData = data.filter(item => item.姓名 === empName);
+        let workDays = 0, absentDays = 0, lateTotal = 0, nightDays = 0, mealTotal = 0;
+        let initSick = 0, initPersonal = 0, initRest = 0;
+        let rowsHtml = '';
+
+        for (let i = 1; i <= currentMonthDays; i++) {
+          const dayData = myData.filter(d => {
+                const dv = String(d.打卡日期 || '').trim();
+                const parts = dv.split(/[-/]/);
+                if (parts.length >= 3) {
+                    const dayNum = parseInt(parts[2], 10);
+                    return dayNum === i; // 精準比對「日」是否等於目前的第 i 天
+                }
+                return false;
+            });
+
+            const dateObj = new Date(curYear, curMonth - 1, i);
+            const weekDay = dateObj.getDay();
+
+            let cellClass = 'cell-d';
+            if (weekDay === 6) cellClass += ' sat-cell';
+            if (weekDay === 0) cellClass += ' sun-cell';
+
+            let amIn = "", amOut = "", pmIn = "", pmOut = "", nightIn = "", nightOut = "";
+            let lateAmThreshold = DEFAULT_LATE_AM;
+
+            dayData.forEach(r => {
+                const shift = String(r.班別 || "");
+                const tIn = String(r.上班打卡時間 || "").replace('--', '').trim();
+                const tOut = String(r.下班打卡時間 || "").replace('--', '').trim();
+
+                if (shift.includes("管理室2")) lateAmThreshold = "09:00";
+
+                if (shift.includes("夜巡")) {
+                    if (tIn) nightIn = tIn.substring(0,5);
+                    if (tOut) nightOut = tOut.substring(0,5);
+                } else if (shift.includes("上午")) {
+                    if (tIn) amIn = tIn.substring(0,5);
+                    if (tOut) amOut = tOut.substring(0,5);
+                } else if (shift.includes("下") || shift.includes("晚")) {
+                    if (tIn) pmIn = tIn.substring(0,5);
+                    if (tOut) pmOut = tOut.substring(0,5);
+                } else {
+                    const inMin = timeToMinutes(tIn);
+                    if (inMin >= 12 * 60) {
+                        if (tIn) pmIn = tIn.substring(0,5);
+                        if (tOut) pmOut = tOut.substring(0,5);
+                    } else {
+                        if (tIn) amIn = tIn.substring(0,5);
+                        if (tOut) amOut = tOut.substring(0,5);
+                    }
+                }
+
+                const lv = parseFloat(r.請假時數) || 0;
+                if (lv > 0) {
+                    const lType = String(r.假別 || '');
+                    if (lType.includes("病")) initSick += lv;
+                    else if (lType.includes("事")) initPersonal += lv;
+                    else initRest += lv;
+                }
+            });
+
+            if (nightIn || nightOut) nightDays++;
+
+            const isAmLate = amIn && amIn >= "05:00" && amIn < "11:30" && amIn > lateAmThreshold;
+            if (isAmLate) lateTotal++;
+
+           // 1. 計算上午實際工作時間（分鐘）
+            let amMinutes = 0;
+            if (amIn && amOut) {
+                const startM = timeToMinutes(amIn);
+                const endM = timeToMinutes(amOut);
+                if (endM > startM) {
+                    amMinutes = endM - startM;
+                }
+            }
+
+            // 2. 判斷各時段打卡狀態
+            const hasAm = !!(amIn || amOut);
+            const hasPm = !!(pmIn || pmOut);
+            const hasNight = !!(nightIn || nightOut);
+
+            let dayWorkCredit = 0;
+            let dayMealCredit = 0;
+
+            // 3. 出勤天數計算
+            if (hasAm && hasPm) {
+                dayWorkCredit = 1;
+            } else if (hasAm || hasPm) {
+                dayWorkCredit = 0.5;
+            } else if (hasNight) {
+                dayWorkCredit = 0;
+            }
+
+            // 4. 餐費新邏輯：必須「上午有打卡」且「上午實際工作時間滿 4 小時 (240分鐘)」才給 1 餐
+            if (hasAm && amMinutes >= 240) {
+                dayMealCredit = 1;
+            } else {
+                dayMealCredit = 0;
+            }
+
+            workDays += dayWorkCredit;
+            absentDays += (1 - dayWorkCredit);
+            mealTotal += dayMealCredit;
+            const isFullAbsent = (dayWorkCredit === 0);
+
+            rowsHtml += `
+                <div class="row ${isFullAbsent ? 'absent-row' : ''}">
+                    <div class="${cellClass}">${i}</div>
+                    <div class="cell-t ${!amIn ? (amOut ? 'missing' : 'no-time') : (isAmLate ? 'late-text' : '')}" id="amin-${empIdx}-${i}">${amIn || '--:--'}</div>
+                    <div class="cell-t ${!amOut ? (amIn ? 'missing' : 'no-time') : ''}" id="amout-${empIdx}-${i}">${amOut || '--:--'}</div>
+                    <div class="cell-t ${!pmIn ? (pmOut ? 'missing' : 'no-time') : (pmIn > LATE_PM ? 'late-text' : '')}" id="pmin-${empIdx}-${i}">${pmIn || '--:--'}</div>
+                    <div class="cell-t ${!pmOut ? (pmIn ? 'missing' : 'no-time') : ''}" id="pmout-${empIdx}-${i}">${pmOut || '--:--'}</div>
+                    <div class="cell-t ${!nightIn && nightOut ? 'missing' : ''}" id="nightin-${empIdx}-${i}">${nightIn || '--:--'}</div>
+                    <div class="cell-t ${!nightOut && nightIn ? 'missing' : ''}" id="nightout-${empIdx}-${i}">${nightOut || '--:--'}</div>
+                    <div class="cell-n">
+                        <button class="btn-lv" onclick="clickBtn(this, ${empIdx}, 'rest', ${AM_HOURS})">休上</button>
+                        <button class="btn-lv" onclick="clickBtn(this, ${empIdx}, 'rest', ${PM_HOURS})">休下</button>
+                        <button class="btn-lv" onclick="clickBtn(this, ${empIdx}, 'pers', ${AM_HOURS})">事上</button>
+                        <button class="btn-lv" onclick="clickBtn(this, ${empIdx}, 'pers', ${PM_HOURS})">事下</button>
+                        <button class="btn-lv" onclick="clickBtn(this, ${empIdx}, 'sick', ${AM_HOURS})">病上</button>
+                        <button class="btn-lv" onclick="clickBtn(this, ${empIdx}, 'sick', ${PM_HOURS})">病下</button>
+                        <span class="ot-label">加:</span>
+                        <input type="number" step="0.5" class="ot-input" id="ot-${empIdx}-${i}" value="0" onchange="recalcOt(${empIdx})">
+                        <input type="text" class="ot-note-input" id="otnote-${empIdx}-${i}" value="" placeholder="" onchange="autoSave()">
+                        <input type="text" class="note-input" id="note-${empIdx}-${i}" value="" placeholder="" onchange="autoSave()">
+                    </div>
+                </div>`;
+        }
+
+        output.innerHTML += `
+            <div class="time-card" id="card-${empIdx}" data-name="${empName}">
+                <h3 class="card-title">${empName}</h3>
+                <table class="summary-table">
+                    <tr>
+                        <td>實出勤<b id="workDays-${empIdx}">${workDays}</b>天</td>
+                        <td>未出勤<b id="absentDays-${empIdx}">${absentDays}</b>天</td>
+                        <td>餐費<b id="mealTotal-${empIdx}">${mealTotal}</b>餐</td>
+                        <td>遲到<b id="lateTotal-${empIdx}">${lateTotal}</b>次</td>
+                        <td>夜巡天數<b id="nightDays-${empIdx}">${nightDays}</b>天</td>
+                        <td>加班<input type="number" step="0.5" class="edit-val" id="otVal-${empIdx}" value="0.0">h</td>
+                        <td>一般假<input type="number" step="0.5" class="edit-val" id="restVal-${empIdx}" value="${initRest}">h</td>
+                        <td>事假<input type="number" step="0.5" class="edit-val" id="persVal-${empIdx}" value="${initPersonal}">h</td>
+                        <td>病假<input type="number" step="0.5" class="edit-val" id="sickVal-${empIdx}" value="${initSick}">h</td>
+                    </tr>
+                </table>
+                <div class="row header-row" style="height: 30px !important;">
+                    <div class="cell-d">日</div>
+                    <div class="cell-t" style="height: 30px !important; line-height: 1.1 !important; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 !important;">上午<br>上班</div>
+                    <div class="cell-t" style="height: 30px !important; line-height: 1.1 !important; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 !important;">上午<br>下班</div>
+                    <div class="cell-t" style="height: 30px !important; line-height: 1.1 !important; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 !important;">下午<br>上班</div>
+                    <div class="cell-t" style="height: 30px !important; line-height: 1.1 !important; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 !important;">下午<br>下班</div>
+                    <div class="cell-t" style="height: 30px !important; line-height: 1.1 !important; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 !important;">夜巡<br>上班</div>
+                    <div class="cell-t" style="height: 30px !important; line-height: 1.1 !important; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 !important;">夜巡<br>下班</div>
+                    <div class="cell-n">點擊補假 / 加班時數 / [綠]加班事由 / [灰]請假備註</div>
+                </div>
+                ${rowsHtml}
+            </div>`;
+    });
+}
+
+window.recalcOt = function(empIdx) {
+    let totalOt = 0;
+    const fieldIds = ['amin', 'amout', 'pmin', 'pmout', 'nightin', 'nightout'];
+
+    for (let d = 1; d <= currentMonthDays; d++) {
+        const otEl = document.getElementById(`ot-${empIdx}-${d}`);
+        const val = otEl ? parseFloat(otEl.value) || 0 : 0;
+        totalOt += val;
+
+        fieldIds.forEach(fId => {
+            const el = document.getElementById(`${fId}-${empIdx}-${d}`);
+            if (el) el.classList.remove('ot-text');
+        });
+
+        if (val > 0) {
+            const targetField = (otTargetStore[empIdx] && otTargetStore[empIdx][d]) ? otTargetStore[empIdx][d] : 'pmout';
+            const targetEl = document.getElementById(`${targetField}-${empIdx}-${d}`);
+            if (targetEl) targetEl.classList.add('ot-text');
+        }
+    }
+    const otValEl = document.getElementById('otVal-' + empIdx);
+    if (otValEl) otValEl.value = Math.max(0, totalOt).toFixed(1);
+    autoSave();
+};
+
+window.clickBtn = function(btn, idx, type, hrs) {
+    const target = document.getElementById(type + 'Val-' + idx);
+    let val = parseFloat(target.value) || 0;
+    const clsMap = { 'rest': 'active-rest', 'pers': 'active-personal', 'sick': 'active-sick' };
+    const cls = clsMap[type];
+    if (btn.classList.contains(cls)) { btn.classList.remove(cls); val -= hrs; }
+    else { btn.classList.add(cls); val += hrs; }
+    target.value = Math.max(0, val).toFixed(1);
+    autoSave();
+};
+
+function collectState() {
+    const cards = document.querySelectorAll('.time-card');
+    const state = { savedAt: new Date().toISOString(), otTargets: otTargetStore, cards: [] };
+    cards.forEach(card => {
+        const idx = card.id.split('-')[1];
+        const btns = [];
+        const notes = {};
+        const otNotes = {};
+        const ots = {};
+        
+        card.querySelectorAll('.btn-lv').forEach(b => {
+            btns.push({ text: b.textContent, classes: b.className });
+        });
+        
+        for (let d = 1; d <= currentMonthDays; d++) {
+            const noteEl = document.getElementById(`note-${idx}-${d}`);
+            if (noteEl && noteEl.value.trim() !== '') notes[d] = noteEl.value.trim();
+
+            const otNoteEl = document.getElementById(`otnote-${idx}-${d}`);
+            if (otNoteEl && otNoteEl.value.trim() !== '') otNotes[d] = otNoteEl.value.trim();
+
+            const otEl = document.getElementById(`ot-${idx}-${d}`);
+            if (otEl) ots[d] = otEl.value;
+        }
+
+        state.cards.push({
+            idx, name: card.getAttribute('data-name'),
+            ot: document.getElementById('otVal-'+idx).value,
+            rest: document.getElementById('restVal-'+idx).value,
+            pers: document.getElementById('persVal-'+idx).value,
+            sick: document.getElementById('sickVal-'+idx).value,
+            buttons: btns, notes: notes, otNotes: otNotes, ots: ots
+        });
+    });
+    return state;
+}
+
+function applyState(state) {
+    if (state.otTargets) otTargetStore = state.otTargets;
+    state.cards.forEach(c => {
+        const card = document.getElementById('card-'+c.idx);
+        if (!card) return;
+        if (c.ot !== undefined) document.getElementById('otVal-'+c.idx).value = c.ot;
+        document.getElementById('restVal-'+c.idx).value = c.rest;
+        document.getElementById('persVal-'+c.idx).value = c.pers;
+        document.getElementById('sickVal-'+c.idx).value = c.sick;
+        
+        const btns = card.querySelectorAll('.btn-lv');
+        c.buttons.forEach((saved, i) => { if (btns[i]) btns[i].className = saved.classes; });
+
+        if (c.ots) {
+            Object.keys(c.ots).forEach(day => {
+                const otEl = document.getElementById(`ot-${c.idx}-${day}`);
+                if (otEl) otEl.value = c.ots[day];
+            });
+        }
+
+        if (c.otNotes) {
+            Object.keys(c.otNotes).forEach(day => {
+                const otNoteEl = document.getElementById(`otnote-${c.idx}-${day}`);
+                if (otNoteEl) otNoteEl.value = c.otNotes[day];
+            });
+        }
+
+        if (c.notes) {
+            Object.keys(c.notes).forEach(day => {
+                const noteEl = document.getElementById(`note-${c.idx}-${day}`);
+                if (noteEl) noteEl.value = c.notes[day];
+            });
+        }
+        recalcOt(c.idx);
+    });
+}
+
+function autoSave() {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(collectState()));
+    } catch(e) {}
+}
+
+let savedFileHandle = null;
+
+window.saveToJson = async function() {
+    const content = JSON.stringify(collectState(), null, 2);
+    try {
+        if (!savedFileHandle) {
+            savedFileHandle = await window.showSaveFilePicker({
+                suggestedName: '考勤編輯進度.json',
+                types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+            });
+        }
+        const writable = await savedFileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        showHint('已儲存進度！');
+    } catch(err) {
+        if (err.name === 'AbortError') return;
+        const blob = new Blob([content], {type: 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = '考勤編輯進度.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+};
+
+window.loadFromJson = async function() {
+    try {
+        const [fileHandle] = await window.showOpenFilePicker({
+            types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+        });
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        const state = JSON.parse(text);
+        applyState(state);
+        savedFileHandle = fileHandle;
+    } catch(err) {
+        if (err.name === 'AbortError') return;
+        alert('載入失敗：' + err.message);
+    }
+};
+
+window.clearState = function() {
+    localStorage.clear();
+    otTargetStore = {};
+    document.querySelectorAll('.btn-lv').forEach(b => { b.className = 'btn-lv'; });
+    document.querySelectorAll('.edit-val').forEach(inp => { inp.value = '0'; });
+    document.querySelectorAll('.ot-input').forEach(inp => { inp.value = '0'; });
+    document.querySelectorAll('.ot-note-input').forEach(inp => { inp.value = ''; });
+    document.querySelectorAll('.note-input').forEach(inp => { inp.value = ''; });
+    document.querySelectorAll('.ot-text').forEach(el => el.classList.remove('ot-text'));
+    showHint('已清空暫存數據！');
+};
+
+function showHint(msg) {
+    const el = document.getElementById('saveHint');
+    if (el) el.textContent = msg;
+}
+
+window.doExport = function() {
+    const cards = document.querySelectorAll('.time-card');
+    const exportData = [];
+    
+    cards.forEach(card => {
+        const idx = card.id.split('-')[1];
+        let noteSummary = [];
+
+        for (let d = 1; d <= currentMonthDays; d++) {
+            const otNoteEl = document.getElementById(`otnote-${idx}-${d}`);
+            const noteEl = document.getElementById(`note-${idx}-${d}`);
+            
+            const otReason = otNoteEl ? otNoteEl.value.trim() : '';
+            const manualNote = noteEl ? noteEl.value.trim() : '';
+
+            let dayDetails = [];
+            if (otReason) dayDetails.push(`[加班]${otReason}`);
+            if (manualNote) dayDetails.push(`[請假/備註]${manualNote}`);
+
+            if (dayDetails.length > 0) {
+                noteSummary.push(`${d}日:${dayDetails.join('; ')}`);
+            }
+        }
+
+        const restHours = parseFloat(document.getElementById('restVal-'+idx).value) || 0;
+        const persHours = parseFloat(document.getElementById('persVal-'+idx).value) || 0;
+        const sickHours = parseFloat(document.getElementById('sickVal-'+idx).value) || 0;
+
+        exportData.push({
+            "姓名": card.getAttribute('data-name'),
+            "實出勤天數": document.getElementById('workDays-'+idx).innerText,
+            "未出勤天數": document.getElementById('absentDays-'+idx).innerText,
+            "餐費": document.getElementById('mealTotal-'+idx).innerText,
+            "遲到次數": document.getElementById('lateTotal-'+idx).innerText,
+            "夜巡天數": document.getElementById('nightDays-'+idx).innerText,
+            "加班時數(h)": parseFloat(document.getElementById('otVal-'+idx).value) || 0,
+            
+            "一般假(d)": restHours / 8,
+            "一般假(h)": restHours,
+            "事假(d)": persHours / 8,
+            "事假(h)": persHours,
+            "病假(d)": sickHours / 8,
+            "病假(h)": sickHours,
+            
+            "考勤備註": noteSummary.join(' | ')
+        });
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "考勤統計總表");
+    XLSX.writeFile(wb, "屏東牧場出勤總表.xlsx");
+};
+</script>
+</body>
+</html>
